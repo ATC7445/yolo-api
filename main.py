@@ -25,36 +25,41 @@ def predict():
     temp_path = os.path.join(UPLOAD_DIR, filename)
     image.save(temp_path)
 
-    # สร้าง predicted_conf40-90
-    for i in range(4, 10):
-        conf = i / 10.0
-        model.predict(
-            source=temp_path,
-            save=True,
-            save_txt=False,
-            conf=conf,
-            project=OUTPUT_DIR,
-            name=f"conf_{int(conf * 100)}"
-        )
+    # ใช้ confidence เดียวเพื่อความเร็ว
+    conf = 0.6
+    predict_dir_name = f"conf_{int(conf * 100)}"
+    predict_dir_path = os.path.join(OUTPUT_DIR, predict_dir_name)
 
-    # รวมไฟล์ไปไว้ใน root outputs/
-    result_paths = []
-    for folder in os.listdir(OUTPUT_DIR):
-        folder_path = os.path.join(OUTPUT_DIR, folder)
-        if os.path.isdir(folder_path) and folder.startswith("conf_"):
-            conf_level = folder.split("_")[1]
-            for file in os.listdir(folder_path):
-                if file.endswith(".jpg") or file.endswith(".png"):
-                    new_filename = f"predicted_conf{conf_level}.{file.split('.')[-1]}"
-                    new_file_path = os.path.join(OUTPUT_DIR, new_filename)
-                    shutil.move(os.path.join(folder_path, file), new_file_path)
-                    result_paths.append(f"/outputs/{new_filename}")
-            shutil.rmtree(folder_path)
+    # รัน prediction
+    model.predict(
+        source=temp_path,
+        save=True,
+        save_txt=False,
+        conf=conf,
+        project=OUTPUT_DIR,
+        name=predict_dir_name
+    )
 
-    return jsonify({
-        "message": "Prediction completed",
-        "results": result_paths
-    })
+    # หาไฟล์ผลลัพธ์ และย้ายขึ้น root /outputs/
+    result_path = None
+    if os.path.exists(predict_dir_path):
+        for file in os.listdir(predict_dir_path):
+            if file.endswith(".jpg") or file.endswith(".png"):
+                ext = file.split(".")[-1]
+                new_filename = f"predicted_conf60.{ext}"
+                new_file_path = os.path.join(OUTPUT_DIR, new_filename)
+                shutil.move(os.path.join(predict_dir_path, file), new_file_path)
+                result_path = f"/outputs/{new_filename}"
+                break
+        shutil.rmtree(predict_dir_path)
+
+    if result_path:
+        return jsonify({
+            "message": "Prediction completed",
+            "path": result_path
+        })
+    else:
+        return jsonify({"error": "No result image generated"}), 500
 
 @app.route("/outputs/<filename>")
 def serve_output(filename):
